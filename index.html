@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agua Marina - Dashboard de Catálogo</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app-container">
+        <!-- Sidebar -->
+        <aside class="sidebar glass">
+            <div class="logo">
+                <h1>🌊 Agua Marina</h1>
+                <p>Gestor de Catálogo</p>
+            </div>
+
+            <div class="filter-group">
+                <h3>Filtrar por Origen</h3>
+                <div class="filter-tags" id="origenFilters">
+                    <button class="tag active" data-filter="all">Todos</button>
+                    <button class="tag" data-filter="Franquicia">Franquicia</button>
+                    <button class="tag" data-filter="Triton">Triton</button>
+                    <button class="tag" data-filter="Lista 2000">Lista 2000</button>
+                    <button class="tag" data-filter="Lista Común">Lista Común</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <h3>Buscar</h3>
+                <input type="text" id="searchInput" placeholder="Buscar por nombre o código..." class="glass-input">
+            </div>
+
+            <div class="filter-group">
+                <h3>Filtrar por Sector / Tipo</h3>
+                <div class="filter-tags" id="sectorFilters">
+                    <button class="tag active" data-filter="all">Todos</button>
+                    <button class="tag" data-filter="Franquicia">Franquicia (May)</button>
+                    <button class="tag" data-filter="Lista 2000">Lista 2000</button>
+                    <button class="tag" data-filter="Triton">Piscinas (Triton)</button>
+                </div>
+            </div>
+
+            <div class="filter-group">
+                <h3>Filtrar por Uso</h3>
+                <div class="filter-tags" id="usoFilters">
+                    <button class="tag active" data-filter="all">Todos</button>
+                    <button class="tag" data-filter="Limpieza General">Limpieza General</button>
+                    <button class="tag" data-filter="Papelería y Baño">Papelería y Baño</button>
+                    <button class="tag" data-filter="Residuos">Residuos</button>
+                    <button class="tag" data-filter="Lavandería">Lavandería</button>
+                    <button class="tag" data-filter="Aseo Personal">Aseo Personal</button>
+                    <button class="tag" data-filter="Automotor">Automotor</button>
+                    <button class="tag" data-filter="Piscinas">Piscinas</button>
+                    <button class="tag" data-filter="Accesorios">Accesorios</button>
+                    <button class="tag" data-filter="Varios">Varios</button>
+                </div>
+            </div>
+            
+            <div class="stats">
+                <p>Total Productos: <span id="totalCount">0</span></p>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <header>
+                <h2>Catálogo de Productos</h2>
+                <div class="actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn" style="background: #10b981; color: white;" onclick="openNewProductModal()">➕ Nuevo</button>
+                    <button class="btn" style="background: #f59e0b; color: white;" onclick="openMassiveUpdateModal()">📈 Aumento Masivo</button>
+                    <button class="btn primary" onclick="exportData()">⬇️ Exportar JSON</button>
+                    <button class="btn" style="background: rgba(255,255,255,0.1); color: white;" onclick="window.print()">🖨️ PDF</button>
+                </div>
+            </header>
+
+            <div class="grid" id="productsGrid">
+                <!-- Productos inyectados por JS -->
+            </div>
+        </main>
+    </div>
+
+    <!-- Edit Modal -->
+    <div id="editModal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3>Editar Producto</h3>
+                <button id="closeModal" class="btn-icon">✖</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="editId">
+                
+                <label>Nombre del Producto</label>
+                <input type="text" id="editNombre" class="glass-input modal-input">
+
+                <label>Presentación</label>
+                <input type="text" id="editPresentacion" class="glass-input modal-input">
+
+                <label>Precio Costo Base ($)</label>
+                <input type="number" id="editCosto" class="glass-input modal-input">
+
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label>% Ganancia Mayorista</label>
+                        <input type="number" id="editMargenMay" class="glass-input modal-input">
+                    </div>
+                    <div style="flex: 1;">
+                        <label>% Ganancia Minorista</label>
+                        <input type="number" id="editMargenMin" class="glass-input modal-input">
+                    </div>
+                </div>
+
+                <div style="margin-top: 1rem; padding: 1rem; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                    <div style="font-size: 0.8rem; color: var(--text-secondary);">Precios de Venta Calculados:</div>
+                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem;">
+                        <strong>Mayorista: <span id="calcMay" style="color: #4ade80;">$0</span></strong>
+                        <strong>Minorista: <span id="calcMin" style="color: #4ade80;">$0</span></strong>
+                    </div>
+                </div>
+
+                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; margin-top: 1.5rem; color: #fca5a5; font-weight: bold;">
+                    <input type="checkbox" id="editSinStock" style="width: 18px; height: 18px;">
+                    Marcar como SIN STOCK
+                </label>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button id="deleteProduct" class="btn" style="background: #ef4444; color: white;">🗑️ Eliminar</button>
+                <button id="saveProduct" class="btn primary">Guardar Cambios</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Massive Update Modal -->
+    <div id="massiveModal" class="modal hidden">
+        <div class="modal-content glass">
+            <div class="modal-header">
+                <h3>Aumento Masivo</h3>
+                <button id="closeMassiveModal" class="btn-icon">✖</button>
+            </div>
+            <div class="modal-body">
+                <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 1rem;">
+                    Aplica un porcentaje de aumento a un grupo de productos.
+                </p>
+
+                <label>Aplicar a Lista (Origen)</label>
+                <select id="massiveOrigen" class="glass-input modal-input">
+                    <option value="all">Todas las Listas</option>
+                    <option value="Franquicia">Franquicia</option>
+                    <option value="Triton">Triton</option>
+                    <option value="Lista 2000">Lista 2000</option>
+                    <option value="Lista Común">Lista Común</option>
+                </select>
+
+                <label>¿Qué valor deseas aumentar?</label>
+                <select id="massiveTarget" class="glass-input modal-input">
+                    <option value="costo">Precio Costo (Inflación)</option>
+                    <option value="margen_may">% Ganancia Mayorista</option>
+                    <option value="margen_min">% Ganancia Minorista</option>
+                </select>
+
+                <label>Porcentaje de Aumento (%)</label>
+                <input type="number" id="massivePercent" class="glass-input modal-input" placeholder="Ej: 15">
+            </div>
+            <div class="modal-footer">
+                <button id="applyMassive" class="btn primary" style="background: #f59e0b;">Aplicar Aumento</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Data & Scripts -->
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
