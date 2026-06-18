@@ -1,4 +1,4 @@
-const catalogoCompleto = [
+[
   {
     "id": "PRD-0001",
     "codigo": null,
@@ -4990,4 +4990,4 @@ const catalogoCompleto = [
     "sin_stock": false,
     "origen": "Nueva Lista PDF"
   }
-];
+]
