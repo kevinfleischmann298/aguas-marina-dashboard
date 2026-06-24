@@ -269,7 +269,21 @@ window.exportData = function() {
 }
 
 // Filtros Listeners
-searchInput.addEventListener('input', (e) => { searchTerm = e.target.value; filterData(); });
+searchInput.addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    const activeBtn = document.querySelector('.nav-btn.active');
+    const target = activeBtn ? activeBtn.getAttribute('data-target') : 'view-catalogo';
+    
+    if (target === 'view-catalogo') {
+        filterData();
+    } else if (target === 'view-pedidos') {
+        renderPedidos();
+    } else if (target === 'view-ratings') {
+        renderRatings();
+    } else if (target === 'view-clientes') {
+        renderClientesVIP();
+    }
+});
 
 origenFilters.addEventListener('click', (e) => {
     if (e.target.tagName === 'BUTTON') {
@@ -291,98 +305,468 @@ usoFilters.addEventListener('click', (e) => {
 
 filterData();
 
-// --- SISTEMA DE NAVEGACIÓN Y NUEVAS VISTAS ---
+// --- CONFIGURACIÓN DE API DINÁMICA ---
+let API_BASE = localStorage.getItem('API_BASE_URL') || 'http://18.223.110.105:3000/api';
 
+const apiUrlInput = document.getElementById('apiUrlInput');
+const apiStatus = document.getElementById('apiStatus');
+
+if (apiUrlInput) {
+    apiUrlInput.value = API_BASE;
+    apiUrlInput.addEventListener('change', (e) => {
+        let val = e.target.value.trim();
+        if (val.endsWith('/')) val = val.slice(0, -1);
+        API_BASE = val;
+        localStorage.setItem('API_BASE_URL', API_BASE);
+        cargarDatosAPI();
+    });
+}
+
+// Variables globales para datos y gráficos
+let dataPedidos = [];
+let dataRatings = [];
+let dataClientesVIP = [];
+
+let salesChartInstance = null;
+let ratingsChartInstance = null;
+
+async function verificarConexionAPI() {
+    if (!apiStatus) return false;
+    apiStatus.className = 'api-status disconnected';
+    apiStatus.innerText = '🔴 Probando...';
+    try {
+        const controller = new AbortController();
+        const id = setTimeout(() => controller.abort(), 3000);
+        const res = await fetch(`${API_BASE}/ratings`, { signal: controller.signal });
+        clearTimeout(id);
+        if (res.ok) {
+            apiStatus.className = 'api-status connected';
+            apiStatus.innerText = '🟢 Conectado';
+            return true;
+        }
+    } catch(e) {}
+    apiStatus.className = 'api-status disconnected';
+    apiStatus.innerText = '🔴 Desconectado';
+    return false;
+}
+
+async function cargarDatosAPI() {
+    const connected = await verificarConexionAPI();
+    
+    // El KPI de catálogo se actualiza siempre desde el catálogo local
+    const kpiCatalogEl = document.getElementById('kpi-catalog');
+    if (kpiCatalogEl) kpiCatalogEl.innerText = productos.length;
+    
+    if (!connected) {
+        document.getElementById('kpi-sales').innerText = '$0';
+        document.getElementById('kpi-orders-count').innerText = '0 pedidos';
+        document.getElementById('kpi-rating').innerText = '0.0';
+        document.getElementById('kpi-rating-count').innerText = '0 opiniones';
+        document.getElementById('kpi-vip').innerText = '0';
+        return;
+    }
+    
+    try {
+        const [resPedidos, resRatings, resVIP] = await Promise.all([
+            fetch(`${API_BASE}/pedidos`).then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch(`${API_BASE}/ratings`).then(r => r.ok ? r.json() : []).catch(() => []),
+            fetch(`${API_BASE}/clientes_calidad`).then(r => r.ok ? r.json() : []).catch(() => [])
+        ]);
+        
+        dataPedidos = resPedidos || [];
+        dataRatings = resRatings || [];
+        dataClientesVIP = resVIP || [];
+        
+        recalcularKPIs();
+        renderCharts();
+    } catch(e) {
+        console.error("Error cargando datos de la API del bot:", e);
+    }
+}
+
+function recalcularKPIs() {
+    // 1. Catálogo (local)
+    const kpiCatalogEl = document.getElementById('kpi-catalog');
+    if (kpiCatalogEl) kpiCatalogEl.innerText = productos.length;
+    
+    // 2. Ventas de Hoy
+    const hoyStr = new Date().toISOString().split('T')[0];
+    let totalHoy = 0;
+    let pedidosHoyCount = 0;
+    
+    dataPedidos.forEach(p => {
+        if (p.fecha && p.fecha.startsWith(hoyStr)) {
+            totalHoy += parseFloat(p.total) || 0;
+            pedidosHoyCount++;
+        }
+    });
+    
+    const kpiSalesEl = document.getElementById('kpi-sales');
+    const kpiOrdersCountEl = document.getElementById('kpi-orders-count');
+    if (kpiSalesEl) kpiSalesEl.innerText = '$' + totalHoy.toLocaleString('es-AR');
+    if (kpiOrdersCountEl) kpiOrdersCountEl.innerText = `${pedidosHoyCount} pedido${pedidosHoyCount !== 1 ? 's' : ''} hoy`;
+    
+    // 3. Satisfacción Promedio
+    const kpiRatingEl = document.getElementById('kpi-rating');
+    const kpiRatingCountEl = document.getElementById('kpi-rating-count');
+    
+    if (dataRatings.length > 0) {
+        let suma = 0;
+        let validRatings = 0;
+        dataRatings.forEach(r => {
+            if (r.rating) {
+                suma += parseFloat(r.rating);
+                validRatings++;
+            }
+        });
+        const prom = validRatings > 0 ? (suma / validRatings).toFixed(1) : '0.0';
+        if (kpiRatingEl) kpiRatingEl.innerText = prom;
+        if (kpiRatingCountEl) kpiRatingCountEl.innerText = `${validRatings} opinio${validRatings !== 1 ? 'nes' : 'n'}`;
+        
+        const avgEl = document.getElementById('ratingsAverage');
+        const starsEl = document.getElementById('ratingsStars');
+        const totalEl = document.getElementById('ratingsTotal');
+        if (avgEl) avgEl.innerText = prom;
+        if (starsEl) starsEl.innerText = '⭐'.repeat(Math.round(prom)) + '☆'.repeat(5 - Math.round(prom));
+        if (totalEl) totalEl.innerText = `${validRatings} valoraciones en total`;
+    } else {
+        if (kpiRatingEl) kpiRatingEl.innerText = '0.0';
+        if (kpiRatingCountEl) kpiRatingCountEl.innerText = '0 opiniones';
+    }
+    
+    // 4. Clientes VIP
+    const kpiVipEl = document.getElementById('kpi-vip');
+    if (kpiVipEl) kpiVipEl.innerText = dataClientesVIP.length;
+}
+
+function renderCharts() {
+    renderSalesChart();
+    renderRatingsChart();
+}
+
+function renderSalesChart() {
+    const canvas = document.getElementById('salesChart');
+    if (!canvas) return;
+    
+    const labels = [];
+    const salesData = [];
+    
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayStr = d.toISOString().split('T')[0];
+        const label = d.toLocaleDateString('es-AR', { day: 'numeric', month: 'short' });
+        labels.push(label);
+        
+        let sum = 0;
+        dataPedidos.forEach(p => {
+            if (p.fecha && p.fecha.startsWith(dayStr)) {
+                sum += parseFloat(p.total) || 0;
+            }
+        });
+        salesData.push(sum);
+    }
+    
+    if (salesChartInstance) {
+        salesChartInstance.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    salesChartInstance = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Ventas ($)',
+                data: salesData,
+                borderColor: '#60a5fa',
+                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointBackgroundColor: '#3b82f6',
+                pointHoverRadius: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return ' Ventas: $' + context.raw.toLocaleString('es-AR');
+                        }
+                    }
+                }
+            },
+            scales: {
+                x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+            }
+        }
+    });
+}
+
+function renderRatingsChart() {
+    const canvas = document.getElementById('ratingsChart');
+    if (!canvas) return;
+    
+    const counts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+    dataRatings.forEach(r => {
+        if (r.rating && counts[r.rating] !== undefined) {
+            counts[r.rating]++;
+        }
+    });
+    
+    if (ratingsChartInstance) {
+        ratingsChartInstance.destroy();
+    }
+    
+    const ctx = canvas.getContext('2d');
+    ratingsChartInstance = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['5 ⭐', '4 ⭐', '3 ⭐', '2 ⭐', '1 ⭐'],
+            datasets: [{
+                data: [counts[5], counts[4], counts[3], counts[2], counts[1]],
+                backgroundColor: [
+                    '#10b981',
+                    '#3b82f6',
+                    '#fbbf24',
+                    '#f59e0b',
+                    '#ef4444'
+                ],
+                borderRadius: 4
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                x: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#94a3b8', stepSize: 1 }, 
+                    beginAtZero: true 
+                },
+                y: { 
+                    grid: { display: false }, 
+                    ticks: { color: '#f8fafc', font: { weight: 'bold' } } 
+                }
+            }
+        }
+    });
+}
+
+// Renderizado de listados
+
+function renderPedidos() {
+    const grid = document.getElementById('pedidosGrid');
+    if (!grid) return;
+    
+    let filtered = dataPedidos;
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(p => 
+            p.cliente_id.toLowerCase().includes(term) ||
+            (p.productos && p.productos.some(prod => prod.nombre.toLowerCase().includes(term)))
+        );
+    }
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay pedidos para mostrar.</p>';
+        return;
+    }
+    
+    grid.innerHTML = '';
+    [...filtered].reverse().forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        let dateLabel = 'Reciente';
+        if (p.fecha) {
+            try {
+                dateLabel = new Date(p.fecha).toLocaleString('es-AR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit'
+                });
+            } catch(e) {}
+        }
+        
+        const tipo = p.tipo_cliente || 'interactivo';
+        const tipoBadge = `<span class="badge-pedido-tipo ${tipo}">${tipo === 'audio' ? '🎙️ Audio' : '📱 Chat'}</span>`;
+        
+        let prodListHtml = '';
+        if (p.productos && p.productos.length > 0) {
+            p.productos.forEach(prod => {
+                prodListHtml += `
+                    <div class="pedido-item">
+                        <span class="pedido-item-name">${prod.nombre}</span>
+                        <span class="pedido-item-qty">x${prod.cantidad}</span>
+                    </div>
+                `;
+            });
+        } else {
+            prodListHtml = '<div style="font-size:0.8rem; color:var(--text-secondary);">Detalle no disponible</div>';
+        }
+        
+        card.innerHTML = `
+            <div class="pedido-header">
+                <div class="pedido-cliente">
+                    <span>📱 ${p.cliente_id.replace('@c.us', '')}</span>
+                    ${tipoBadge}
+                </div>
+                <div class="pedido-fecha">${dateLabel}</div>
+            </div>
+            <div class="pedido-item-list">
+                ${prodListHtml}
+            </div>
+            <div class="pedido-total-row">
+                <span>Total</span>
+                <span>$${parseFloat(p.total || 0).toLocaleString('es-AR')}</span>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function renderRatings() {
+    const grid = document.getElementById('ratingsGrid');
+    if (!grid) return;
+    
+    let filtered = dataRatings;
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(r => 
+            r.cliente_id.toLowerCase().includes(term) ||
+            (r.comentario && r.comentario.toLowerCase().includes(term))
+        );
+    }
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay valoraciones para mostrar.</p>';
+        return;
+    }
+    
+    grid.innerHTML = '';
+    [...filtered].reverse().forEach(r => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        let stars = '⭐'.repeat(r.rating || 5);
+        let commentHtml = r.comentario ? `<div class="rating-comment-bubble">"${r.comentario}"</div>` : '';
+        
+        let dateLabel = 'Reciente';
+        if (r.fecha) {
+            try { dateLabel = new Date(r.fecha).toLocaleDateString('es-AR'); } catch(e) {}
+        }
+        
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="card-title">${stars}</div>
+                <div class="card-badge">${dateLabel}</div>
+            </div>
+            <div class="card-meta">
+                <span>📱 Cliente: <strong>${r.cliente_id.replace('@c.us', '')}</strong></span>
+                ${commentHtml}
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+function renderClientesVIP() {
+    const grid = document.getElementById('clientesGrid');
+    if (!grid) return;
+    
+    let filtered = dataClientesVIP;
+    if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        filtered = filtered.filter(c => c.cliente_id.toLowerCase().includes(term));
+    }
+    
+    if (filtered.length === 0) {
+        grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay clientes VIP para mostrar.</p>';
+        return;
+    }
+    
+    grid.innerHTML = '';
+    [...filtered].reverse().forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'card';
+        
+        let dateLabel = 'Reciente';
+        if (c.fecha_identificacion) {
+            try { dateLabel = new Date(c.fecha_identificacion).toLocaleDateString('es-AR'); } catch(e) {}
+        }
+        
+        card.innerHTML = `
+            <div class="card-header">
+                <div class="card-title">📱 ${c.cliente_id.replace('@c.us', '')}</div>
+                <div class="card-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc; border: 1px solid rgba(139, 92, 246, 0.2);">VIP</div>
+            </div>
+            <div class="card-meta">
+                <span>📅 Detectado: <strong>${dateLabel}</strong></span>
+                <span>🛒 Pedidos sin bot: <strong>${c.pedidos_sin_interaccion || 0}</strong></span>
+            </div>
+            <div class="card-price">
+                <div><span class="price-label">Gasto Histórico</span> $${parseFloat(c.total_gastado || 0).toLocaleString('es-AR')}</div>
+            </div>
+        `;
+        grid.appendChild(card);
+    });
+}
+
+// Actualización manual expuesta globalmente
+window.cargarPedidos = async function() {
+    await cargarDatosAPI();
+    renderPedidos();
+};
+
+// --- SISTEMA DE NAVEGACIÓN ---
 const navBtns = document.querySelectorAll('.nav-btn');
 const views = document.querySelectorAll('.view');
 
 navBtns.forEach(btn => {
     btn.addEventListener('click', () => {
-        // Quitar active a todos
         navBtns.forEach(b => b.classList.remove('active'));
         views.forEach(v => v.style.display = 'none');
         
-        // Agregar active al tocado
         btn.classList.add('active');
         const targetId = btn.getAttribute('data-target');
         document.getElementById(targetId).style.display = 'block';
 
-        if (targetId === 'view-ratings') cargarRatings();
-        if (targetId === 'view-clientes') cargarClientesVIP();
+        // Manejar visibilidad de filtros del catálogo
+        const catalogFilters = document.querySelectorAll('.catalog-filter');
+        if (targetId === 'view-catalogo') {
+            catalogFilters.forEach(f => f.style.display = 'block');
+        } else {
+            catalogFilters.forEach(f => f.style.display = 'none');
+        }
+
+        // Limpiar búsqueda al cambiar de pestaña
+        searchInput.value = '';
+        searchTerm = '';
+
+        // Cargar datos al hacer click para mantener sincronía
+        if (targetId === 'view-pedidos') {
+            renderPedidos();
+            cargarDatosAPI().then(() => renderPedidos());
+        }
+        if (targetId === 'view-ratings') {
+            renderRatings();
+            cargarDatosAPI().then(() => renderRatings());
+        }
+        if (targetId === 'view-clientes') {
+            renderClientesVIP();
+            cargarDatosAPI().then(() => renderClientesVIP());
+        }
     });
 });
 
-// Fetch y Renderizado
-const API_BASE = 'http://localhost:3000/api';
-
-async function cargarRatings() {
-    const grid = document.getElementById('ratingsGrid');
-    grid.innerHTML = '<p>Cargando ratings...</p>';
-    try {
-        const res = await fetch(`${API_BASE}/ratings`);
-        if (!res.ok) throw new Error('API off');
-        const data = await res.json();
-        
-        if (data.length === 0) {
-            grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay ratings todavía.</p>';
-            return;
-        }
-
-        grid.innerHTML = '';
-        data.forEach(r => {
-            const card = document.createElement('div');
-            card.className = 'card';
-            let stars = '⭐'.repeat(r.rating || 5);
-            card.innerHTML = `
-                <div class="card-header">
-                    <div class="card-title">${stars}</div>
-                    <div class="card-badge">${new Date(r.fecha).toLocaleDateString()}</div>
-                </div>
-                <div class="card-meta">
-                    <span>📱 Cliente: <strong>${r.cliente_id}</strong></span>
-                    <span style="margin-top: 10px; font-style: italic; color: #fff;">"${r.comentario || 'Sin comentarios'}"</span>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-    } catch(e) {
-        grid.innerHTML = '<p style="color: #fca5a5; grid-column: 1/-1;">No se pudo conectar a la API del bot. ¿Está corriendo localmente en el puerto 3000?</p>';
-    }
-}
-
-async function cargarClientesVIP() {
-    const grid = document.getElementById('clientesGrid');
-    grid.innerHTML = '<p>Cargando clientes VIP...</p>';
-    try {
-        const res = await fetch(`${API_BASE}/clientes_calidad`);
-        if (!res.ok) throw new Error('API off');
-        const data = await res.json();
-        
-        if (data.length === 0) {
-            grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay clientes de calidad identificados todavía.</p>';
-            return;
-        }
-
-        grid.innerHTML = '';
-        data.forEach(c => {
-            const card = document.createElement('div');
-            card.className = 'card';
-            card.innerHTML = `
-                <div class="card-header">
-                    <div class="card-title">📱 ${c.cliente_id}</div>
-                    <div class="card-badge">VIP</div>
-                </div>
-                <div class="card-meta">
-                    <span>📅 Detectado el: <strong>${c.fecha_identificacion}</strong></span>
-                    <span>🛒 Pedidos sin interactuar: <strong>${c.pedidos_sin_interaccion}</strong></span>
-                </div>
-                <div class="card-price">
-                    <div><span class="price-label">Total Histórico</span> $${c.total_gastado?.toLocaleString('es-AR') || 0}</div>
-                </div>
-            `;
-            grid.appendChild(card);
-        });
-    } catch(e) {
-        grid.innerHTML = '<p style="color: #fca5a5; grid-column: 1/-1;">No se pudo conectar a la API del bot. ¿Está corriendo localmente en el puerto 3000?</p>';
-    }
-}
+// Carga inicial y chequeo de API al abrir el dashboard
+cargarDatosAPI();
