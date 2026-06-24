@@ -306,7 +306,11 @@ usoFilters.addEventListener('click', (e) => {
 filterData();
 
 // --- CONFIGURACIÓN DE API DINÁMICA ---
-let API_BASE = localStorage.getItem('API_BASE_URL') || 'http://18.223.110.105:3000/api';
+let API_BASE = localStorage.getItem('API_BASE_URL');
+if (!API_BASE || API_BASE === 'http://18.223.110.105:3000/api' || API_BASE === 'http://localhost:3000/api') {
+    API_BASE = 'https://bot-aguamarina.18-223-110-105.sslip.io/api';
+    localStorage.setItem('API_BASE_URL', API_BASE);
+}
 
 const apiUrlInput = document.getElementById('apiUrlInput');
 const apiStatus = document.getElementById('apiStatus');
