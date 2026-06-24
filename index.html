@@ -16,6 +16,14 @@
                 <p>Gestor de Catálogo</p>
             </div>
 
+            <!-- NAVEGACIÓN PRINCIPAL -->
+            <nav class="main-nav">
+                <button class="nav-btn active" data-target="view-catalogo">📦 Catálogo</button>
+                <button class="nav-btn" data-target="view-ratings">⭐ Ratings</button>
+                <button class="nav-btn" data-target="view-clientes">👑 Clientes VIP</button>
+            </nav>
+
+
             <div class="filter-group">
                 <h3>Filtrar por Origen</h3>
                 <div class="filter-tags" id="origenFilters">
@@ -65,19 +73,43 @@
 
         <!-- Main Content -->
         <main class="main-content">
-            <header>
-                <h2>Catálogo de Productos</h2>
-                <div class="actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
-                    <button class="btn" style="background: #10b981; color: white;" onclick="openNewProductModal()">➕ Nuevo</button>
-                    <button class="btn" style="background: #f59e0b; color: white;" onclick="openMassiveUpdateModal()">📈 Aumento Masivo</button>
-                    <button class="btn primary" onclick="exportData()">⬇️ Exportar JSON</button>
-                    <button class="btn" style="background: rgba(255,255,255,0.1); color: white;" onclick="window.print()">🖨️ PDF</button>
+            
+            <!-- VISTA: CATÁLOGO -->
+            <div id="view-catalogo" class="view">
+                <header>
+                    <h2>Catálogo de Productos</h2>
+                    <div class="actions" style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <button class="btn" style="background: #10b981; color: white;" onclick="openNewProductModal()">➕ Nuevo</button>
+                        <button class="btn" style="background: #f59e0b; color: white;" onclick="openMassiveUpdateModal()">📈 Aumento Masivo</button>
+                        <button class="btn primary" onclick="exportData()">⬇️ Exportar JSON</button>
+                        <button class="btn" style="background: rgba(255,255,255,0.1); color: white;" onclick="window.print()">🖨️ PDF</button>
+                    </div>
+                </header>
+                <div class="grid" id="productsGrid">
+                    <!-- Productos inyectados por JS -->
                 </div>
-            </header>
-
-            <div class="grid" id="productsGrid">
-                <!-- Productos inyectados por JS -->
             </div>
+
+            <!-- VISTA: RATINGS -->
+            <div id="view-ratings" class="view" style="display: none;">
+                <header>
+                    <h2>Ratings y Experiencia</h2>
+                </header>
+                <div class="grid" id="ratingsGrid">
+                    <!-- Ratings inyectados por JS -->
+                </div>
+            </div>
+
+            <!-- VISTA: CLIENTES VIP -->
+            <div id="view-clientes" class="view" style="display: none;">
+                <header>
+                    <h2>Clientes de Calidad (Recurrentes)</h2>
+                </header>
+                <div class="grid" id="clientesGrid">
+                    <!-- Clientes inyectados por JS -->
+                </div>
+            </div>
+
         </main>
     </div>
 

@@ -66,6 +66,38 @@ body {
     color: var(--text-secondary);
 }
 
+/* Navigation */
+.main-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.nav-btn {
+    text-align: left;
+    padding: 0.8rem 1rem;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: 0.3s;
+}
+
+.nav-btn:hover {
+    background: rgba(255,255,255,0.05);
+    color: white;
+}
+
+.nav-btn.active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+}
+
+
 .filter-group h3 {
     font-size: 0.9rem;
     text-transform: uppercase;

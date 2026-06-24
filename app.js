@@ -290,3 +290,99 @@ usoFilters.addEventListener('click', (e) => {
 });
 
 filterData();
+
+// --- SISTEMA DE NAVEGACIÓN Y NUEVAS VISTAS ---
+
+const navBtns = document.querySelectorAll('.nav-btn');
+const views = document.querySelectorAll('.view');
+
+navBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+        // Quitar active a todos
+        navBtns.forEach(b => b.classList.remove('active'));
+        views.forEach(v => v.style.display = 'none');
+        
+        // Agregar active al tocado
+        btn.classList.add('active');
+        const targetId = btn.getAttribute('data-target');
+        document.getElementById(targetId).style.display = 'block';
+
+        if (targetId === 'view-ratings') cargarRatings();
+        if (targetId === 'view-clientes') cargarClientesVIP();
+    });
+});
+
+// Fetch y Renderizado
+const API_BASE = 'http://localhost:3000/api';
+
+async function cargarRatings() {
+    const grid = document.getElementById('ratingsGrid');
+    grid.innerHTML = '<p>Cargando ratings...</p>';
+    try {
+        const res = await fetch(`${API_BASE}/ratings`);
+        if (!res.ok) throw new Error('API off');
+        const data = await res.json();
+        
+        if (data.length === 0) {
+            grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay ratings todavía.</p>';
+            return;
+        }
+
+        grid.innerHTML = '';
+        data.forEach(r => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            let stars = '⭐'.repeat(r.rating || 5);
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="card-title">${stars}</div>
+                    <div class="card-badge">${new Date(r.fecha).toLocaleDateString()}</div>
+                </div>
+                <div class="card-meta">
+                    <span>📱 Cliente: <strong>${r.cliente_id}</strong></span>
+                    <span style="margin-top: 10px; font-style: italic; color: #fff;">"${r.comentario || 'Sin comentarios'}"</span>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    } catch(e) {
+        grid.innerHTML = '<p style="color: #fca5a5; grid-column: 1/-1;">No se pudo conectar a la API del bot. ¿Está corriendo localmente en el puerto 3000?</p>';
+    }
+}
+
+async function cargarClientesVIP() {
+    const grid = document.getElementById('clientesGrid');
+    grid.innerHTML = '<p>Cargando clientes VIP...</p>';
+    try {
+        const res = await fetch(`${API_BASE}/clientes_calidad`);
+        if (!res.ok) throw new Error('API off');
+        const data = await res.json();
+        
+        if (data.length === 0) {
+            grid.innerHTML = '<p style="color: var(--text-secondary); grid-column: 1/-1;">No hay clientes de calidad identificados todavía.</p>';
+            return;
+        }
+
+        grid.innerHTML = '';
+        data.forEach(c => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <div class="card-header">
+                    <div class="card-title">📱 ${c.cliente_id}</div>
+                    <div class="card-badge">VIP</div>
+                </div>
+                <div class="card-meta">
+                    <span>📅 Detectado el: <strong>${c.fecha_identificacion}</strong></span>
+                    <span>🛒 Pedidos sin interactuar: <strong>${c.pedidos_sin_interaccion}</strong></span>
+                </div>
+                <div class="card-price">
+                    <div><span class="price-label">Total Histórico</span> $${c.total_gastado?.toLocaleString('es-AR') || 0}</div>
+                </div>
+            `;
+            grid.appendChild(card);
+        });
+    } catch(e) {
+        grid.innerHTML = '<p style="color: #fca5a5; grid-column: 1/-1;">No se pudo conectar a la API del bot. ¿Está corriendo localmente en el puerto 3000?</p>';
+    }
+}
